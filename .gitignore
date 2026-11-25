@@ -2,7 +2,6 @@
 .vscode
 logs/
 pstats
-data/
 profile.pstats
 catanatron-venv
 .DS_Store
