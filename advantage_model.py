@@ -1,5 +1,6 @@
 """Exact fixed-production readiness for a road and third settlement; no gameplay."""
 from collections import Counter
+from functools import lru_cache
 from importlib import import_module
 from pathlib import Path
 import numpy as np
@@ -39,12 +40,16 @@ def readiness_curve(start, gains, horizon=160, trade=True):
     assert np.all(np.diff(curve)>=-1e-9)
     return np.maximum.accumulate(np.clip(curve,0,1))
 
+@lru_cache(maxsize=4096)
+def _cached_curve(start, gains, horizon, trade):
+    return readiness_curve(start, gains, horizon, trade)
+
 def build_advantage(p,t,f,max_turns=MAX_TURNS):
     fe=import_module('03_feature_engineering')
     nodes,_,_=fe.build_topology(t)
     maps={gid:g.set_index('Tile_ID') for gid,g in t.groupby('Game_ID')}
     rows=[]; curves=[]
-    for r in p.itertuples(index=False):
+    for i,r in enumerate(p.itertuples(index=False),1):
         board=maps[r.Game_ID]; gains=np.zeros((13,5),dtype=int); start=np.zeros(5,dtype=int)
         for j,node in enumerate((r.Settlement_1,r.Settlement_2)):
             for tid in nodes[node]:
@@ -53,8 +58,10 @@ def build_advantage(p,t,f,max_turns=MAX_TURNS):
                 k=RESOURCES.index(tile.Resource); gains[int(tile.Number),k]+=1
                 if j==1: start[k]+=1
         player=int(r.Placement_Order)
-        a=readiness_curve(start,gains,4*max_turns,True)
-        b=readiness_curve(start,gains,4*max_turns,False)
+        signature=tuple(tuple(int(v) for v in row) for row in gains)
+        initial=tuple(int(v) for v in start)
+        a=_cached_curve(initial,signature,4*max_turns,True)
+        b=_cached_curve(initial,signature,4*max_turns,False)
         assert np.all(a>=b-1e-9)
         own=np.arange(player,4*max_turns+1,4)
         hits=np.flatnonzero(a[own]>=.5-1e-12)
@@ -64,6 +71,9 @@ def build_advantage(p,t,f,max_turns=MAX_TURNS):
             if turn<=max_turns: row[f'Resource_Prob_Turn_{turn}']=a[own[turn-1]]
         for turn,n in enumerate(own,1): curves.append((r.Game_ID,r.Player,player,turn,n,a[n],b[n]))
         rows.append(row)
+        if i%250==0 or i==len(p):
+            print(f"Readiness: {i:,}/{len(p):,} players",flush=True)
+    _cached_curve.cache_clear()
     d=f.merge(pd.DataFrame(rows),on=['Game_ID','Player'],validate='one_to_one')
     assert d.Player_Number.eq(d.Placement_Order).all()
     c=pd.DataFrame(curves,columns=['Game_ID','Player','Player_Number','Personal_Turn','Total_Rolls','Resource_Probability_Trade','Resource_Probability_NoTrade'])
@@ -80,7 +90,7 @@ def build_advantage(p,t,f,max_turns=MAX_TURNS):
 
 if __name__=='__main__':
     import sys
-    root=Path(sys.argv[1] if len(sys.argv)>1 else 'processed_data')
+    root=Path(sys.argv[1] if len(sys.argv)>1 else 'processed_data_5000')
     d,c=build_advantage(*(pd.read_csv(root/n) for n in ('initial_placements.csv','map_tiles.csv','initial_features.csv')))
     d.to_csv(root/'starting_advantage.csv',index=False); c.to_csv(root/'readiness_curves.csv',index=False)
     print(d.Status.value_counts()); print(d.Turns_To_50.describe()); print(d.groupby('Player_Number')[['Turns_To_50','Prob_Turn_5','Prob_Turn_10','Blocked']].mean()); print(c.groupby('Personal_Turn')[['Build_Probability_Trade','Build_Probability_NoTrade']].mean().loc[[1,2,3,5,10,20,40]])

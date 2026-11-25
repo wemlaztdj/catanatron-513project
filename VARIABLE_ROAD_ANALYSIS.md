@@ -29,3 +29,6 @@ BFS searches from both initial road networks, respecting occupied roads, opponen
 Historical pilot: 376 of 400 players required one road, 24 required two, none had no path. All 24 newly eligible positions reached the 50% threshold in 40 turns in an independent calculation. These are not results for the fresh 5,000 games.
 
 No new simulation, Python unit test or notebook execution was performed during branch recreation. Run locally for the new results.
+
+## Notebook 05/06 troubleshooting
+Select your installed Python environment (Python 3 kernel) and run from the repository root. 05a validates the 5,000-game CSVs before computing and prints progress every 250 players. Set REUSE_EXISTING=True only to reuse scores for the same game IDs. 05b validates the dataset and prints progress for each algorithm. 06 can generate five descriptive charts without 05b; classifier charts appear only when current classification outputs are present. The CLI defaults for advantage_model.py, advantage_analysis.py and advantage_charts.py now use the 5,000-game paths. No model assumptions or classification hyperparameters changed (parallel workers and exact-result caching only).
