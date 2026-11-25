@@ -138,3 +138,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Fresh 5,000-game experiment (local only)
+/data_5000/
+/processed_data_5000/
+/processed_data_variable_5000/
+/charts/5000/
+/charts/outcomes_5000/
+/charts/variable_road_5000/
